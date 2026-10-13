@@ -1,0 +1,26 @@
+#!/bin/sh
+# Notch Island hook for Claude Code.
+#
+# Claude Code runs this for each hook event, with the event as JSON on standard input. It is
+# handed to Notch Island over a local socket that only your user can open, and whatever the app
+# answers is printed back to Claude Code. Only a permission request ever gets an answer: your
+# Allow or Deny from the notch.
+#
+# If Notch Island is not running, or anything goes wrong, this prints nothing and exits 0, and
+# Claude Code carries on exactly as it would without it (including its own permission prompt in
+# the terminal, which stays live the whole time either way).
+#
+# NOTCH_ISLAND_SOCKET overrides the socket path (used by the app's self-test).
+SOCK="${NOTCH_ISLAND_SOCKET:-$HOME/Library/Application Support/NotchIsland/claude.sock}"
+[ -S "$SOCK" ] || exit 0
+
+# nc runs in the background so that, if Claude Code stops waiting for this hook (you answered
+# in the terminal), the signal it sends here is passed on to nc. The app then sees the request
+# has gone and takes its card down. Standard input is handed over explicitly: a background
+# command would otherwise get /dev/null.
+exec 3<&0
+/usr/bin/nc -U "$SOCK" <&3 2>/dev/null &
+nc_pid=$!
+trap 'kill "$nc_pid" 2>/dev/null; exit 0' TERM INT HUP
+wait "$nc_pid"
+exit 0

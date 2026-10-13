@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Notch Island</string>
+	<key>CFBundleExecutable</key>
+	<string>NotchIsland</string>
+	<key>CFBundleIdentifier</key>
+	<string>local.NotchIsland</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Notch Island</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>local.NotchIsland</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>notchisland</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>To read the current song and play, pause or skip.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>To show your next event. Nothing leaves your Mac.</string>
+	<key>NSFocusStatusUsageDescription</key>
+	<string>To show a bubble when Focus turns on or off.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSLocationUsageDescription</key>
+	<string>To show the weather where you are. Your position is rounded to about 10 km before it is sent to Open-Meteo.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>To show the weather where you are. Your position is rounded to about 10 km before it is sent to Open-Meteo.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+</dict>
+</plist>
