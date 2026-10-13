@@ -7,9 +7,10 @@ right from the notch.
 
 - **The island**: Liquid Glass around the notch, clear like the menu bar while it is a small pill and
   tinted to your theme when open. Rest the pointer on the notch for a moment to open it; move away and it
-  closes; click it to keep it open; click anywhere else to close it.
+  closes; click the glass beside the notch to keep it open; click anywhere else to close it.
 - **Tiles**: music (Apple Music and Spotify, with synced lyrics), weather, your next calendar event, and a
-  25-minute focus timer. Show, hide and reorder them from the menu bar, or drag them in the open island.
+  25-minute focus timer. Click a tile to open its app. Show, hide and reorder them from the menu bar, or
+  drag them in the open island.
 - **Peeks**: a bubble when an app opens or quits, when you plug in the charger, when the battery reaches
   20% and 10%, and when a Focus turns on or off.
 - **Claude Code**: what Claude is doing right now, permission requests with Allow and Deny (or ⌃⌥⌘Y and
@@ -27,7 +28,7 @@ right from the notch.
 
 ### Download (easiest)
 
-1. Download **NotchIsland-0.1.1.zip** (or the newest version) from the
+1. Download **NotchIsland-0.1.2.zip** (or the newest version) from the
    [Releases page](https://github.com/AEllison98/notch-island/releases/latest) and double-click it to
    unzip.
 2. Drag **NotchIsland.app** into your **Applications** folder.
@@ -63,7 +64,8 @@ Without a certificate it signs ad-hoc and tells you so. To choose a certificate 
 
 **The island.** Rest the pointer on the notch to open it, click to keep it open, click anywhere else to
 close it. While something is going on (music, the timer, Claude working) the notch grows into a small
-pill; click the pill to open the island.
+pill; click the pill to open the island. To keep it open, click the glass beside the notch or the timer:
+a click on the Music, Weather or Calendar tile opens that app (below).
 
 **The menu** (the capsule icon in the menu bar):
 
@@ -78,18 +80,24 @@ pill; click the pill to open the island.
 | Preview | Show a bubble, the pill or the open island, to see how they look |
 | Quit Notch Island | |
 
-**Tiles.**
+**Tiles.** Click the Music, Weather or Calendar tile to open its app; the tile is tinted a little under the
+pointer to show it. The buttons inside a tile still do their own thing, and dragging a tile moves it
+without opening anything. With VoiceOver, each of these tiles has an "Open …" action.
 
 - **Music**: works with Apple Music and Spotify. When a player is open, the tile shows a **Connect**
   button; click it once and macOS asks whether Notch Island may control that player. Then you get the cover
   (Spotify shows its app icon instead; see Privacy), title, artist, a progress bar, play/pause/next/previous
-  and the current line of the lyrics, synced, under the tiles.
+  and the current line of the lyrics, synced, under the tiles. Clicking the tile opens the player it
+  shows. With nothing playing (the dimmed controls included), it opens a player that is open (the one you
+  used last, if both are), else the one you used last, else Apple Music.
 - **Weather**: temperature, conditions, and the day's high and low, for your location or a city. Updates
-  every 30 minutes and when you open the island. Uses °F where your region does.
+  every 30 minutes and when you open the island. Uses °F where your region does. Clicking it opens the
+  Weather app.
 - **Calendar**: click **Connect Calendar** once; then the tile shows the event that is on now, or the next
-  one in the coming week. All-day events and meetings you declined are left out.
+  one in the coming week. All-day events and meetings you declined are left out. Clicking it opens
+  Calendar.
 - **Focus timer**: 25 minutes. Start, pause and reset; the pill counts down while it runs, and a bubble
-  says when it is done.
+  says when it is done. It has no app, so clicking it just keeps the island open.
 
 **Peeks.** Apps opening and quitting, the charger, and the battery at 20% and 10% need nothing. **Focus On
 and Off** is off until you turn it on under **Peeks**, which is when macOS asks for Focus permission. macOS

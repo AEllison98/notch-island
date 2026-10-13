@@ -73,14 +73,32 @@ final class IslandModel {
     var lyrics: Lyrics?
     /// A Claude Code permission request waiting for your answer.
     var claude: ClaudeCard?
+    /// The tile under the pointer, for its hover tint. Cleared when the island closes, so a tile
+    /// left under the pointer is not still lit the next time it opens.
+    var hoveredTile: TileKind?
+    /// The player you used last, so an idle Music tile opens yours rather than always Apple Music.
+    @ObservationIgnored var lastPlayer: Player?
     let focusTimer = FocusTimer()
 
     @ObservationIgnored var onTap: () -> Void = {}
+
+    /// The app a click on this tile opens (nil for the timer).
+    func appBundleID(for kind: TileKind) -> String? {
+        IslandController.appBundleID(for: kind, music: music, running: Player.allCases.filter(\.isRunning), lastPlayer: lastPlayer)
+    }
+
+    /// What VoiceOver calls a click on the tile. An idle Music tile says "Open music player":
+    /// which one it opens depends on what is running, and the island is not told when that changes.
+    func openActionName(for kind: TileKind) -> String? {
+        if kind == .music, case .idle = music { return "Open music player" }
+        return appBundleID(for: kind).map { "Open \(IslandController.appName(forBundleID: $0))" }
+    }
     @ObservationIgnored var onDragBegan: () -> Void = {}
     @ObservationIgnored var onReorder: ([TileKind]) -> Void = { _ in }
     /// Called each time the island opens, so tiles can refresh stale data.
     @ObservationIgnored var onOpened: () -> Void = {}
     @ObservationIgnored var onConnectCalendar: () -> Void = {}
+    @ObservationIgnored var onOpenTile: (TileKind) -> Void = { _ in }
     @ObservationIgnored var onMusicCommand: (MusicCommand) -> Void = { _ in }
     @ObservationIgnored var onConnectPlayer: (Player) -> Void = { _ in }
     @ObservationIgnored var onClaudeDecision: (Bool) -> Void = { _ in }
@@ -250,6 +268,7 @@ final class IslandController {
         panel.contentView = container
         model.onTap = { [weak self] in self?.tapped() }
         model.onDragBegan = { [weak self] in self?.pinOpen() }
+        model.onOpenTile = { [weak self] in self?.openApp(for: $0) }
 
         let shadowHosting = NSHostingView(rootView: IslandShadowView(model: model))
         shadowHosting.sizingOptions = []
@@ -346,6 +365,57 @@ final class IslandController {
         }
     }
 
+    /// A click on a tile: open the app behind it, and get out of its way.
+    func openApp(for kind: TileKind) {
+        guard let wanted = model.appBundleID(for: kind) else { return }
+        // The player you used last may have been uninstalled since: then Apple Music.
+        let installed = [wanted, kind == .music ? Player.music.rawValue : nil].compactMap { $0 }
+            .first { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
+        // The self-test records what a click would open, installed or not (Spotify need not be).
+        guard let bundleID = Diag.selfTest ? wanted : installed else { NSSound.beep(); return }
+        lastOpenedApp = bundleID
+        collapse()
+        // The self-test only records what a click would open; it never opens your apps.
+        guard !Diag.selfTest, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return }
+        Self.appsOpened += 1
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+    }
+
+    /// Apps really opened from a tile. The self-test checks it stays at zero.
+    private(set) static var appsOpened = 0
+
+    /// The Music tile opens the player it is showing; with nothing loaded, an open player (the
+    /// one you used last, if both are open), else the one you used last, else Apple Music.
+    /// `running` is only asked for in that last case.
+    static func appBundleID(for kind: TileKind, music: MusicState, running: @autoclosure () -> [Player],
+                            lastPlayer: Player?) -> String? {
+        switch kind {
+        case .music:
+            switch music {
+            case .nowPlaying(let now): return now.player.rawValue
+            case .needsConsent(let player), .denied(let player): return player.rawValue
+            case .idle:
+                let open = running()
+                return (open.first { $0 == lastPlayer } ?? open.first ?? lastPlayer ?? .music).rawValue
+            }
+        case .weather: return "com.apple.weather"
+        case .calendar: return "com.apple.iCal"
+        case .timer: return nil
+        }
+    }
+
+    /// The app's name, as VoiceOver says it in "Open …".
+    static func appName(forBundleID id: String) -> String {
+        if let player = Player(rawValue: id) { return player.name }
+        switch id {
+        case "com.apple.weather": return "Weather"
+        case "com.apple.iCal": return "Calendar"
+        default: return id
+        }
+    }
+
     /// Keeps the open island open while something is being done in it (a tile being dragged).
     func pinOpen() {
         if model.mode == .expanded && !model.pinned { pin() }
@@ -363,6 +433,7 @@ final class IslandController {
 
     func collapse(alongside: () -> Void = {}) {
         model.pinned = false
+        model.hoveredTile = nil
         removeOutsideClickMonitor()
         guard model.mode == .expanded else { alongside(); return }
         setMode(baseMode, alongside: alongside)
@@ -632,6 +703,8 @@ final class IslandController {
     // MARK: Self-test hooks
 
     private(set) var expandCount = 0
+    /// The app a tile click last opened (or, in the self-test, would have opened).
+    var lastOpenedApp: String?
     var windowFitForTest: CGSize { windowFit }
     /// A point as SwiftUI reports it in .global (the window, top-left origin), on screen.
     func screenPoint(fromWindow p: CGPoint) -> CGPoint {

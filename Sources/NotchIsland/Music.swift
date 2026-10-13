@@ -206,6 +206,8 @@ final class MusicService {
     private let model: IslandModel
     private weak var island: IslandController?
     private let lyricsService = LyricsService()
+    /// Remembers your player between launches, for an idle Music tile.
+    static let lastPlayerKey = "lastPlayer"
     /// The player whose change notification came last: the one you are using.
     private var lastActive: Player?
     /// Players that just announced "Stopped". Sent when playback stops, but also as a player
@@ -230,6 +232,9 @@ final class MusicService {
         model.onConnectPlayer = { [weak self] in self?.connect($0) }
         // The self-test never talks to your players: no prompts, nothing launched.
         guard !Diag.selfTest else { return }
+        // Not a player that has been uninstalled since.
+        model.lastPlayer = UserDefaults.standard.string(forKey: Self.lastPlayerKey).flatMap(Player.init(rawValue:))
+            .flatMap { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.rawValue) != nil ? $0 : nil }
 
         let distributed = DistributedNotificationCenter.default()
         for player in Player.allCases {
@@ -356,6 +361,10 @@ final class MusicService {
 
     private func apply(_ state: MusicState) {
         guard let island else { return }
+        if case .nowPlaying(let now) = state, now.player != model.lastPlayer, !Diag.selfTest {
+            model.lastPlayer = now.player
+            UserDefaults.standard.set(now.player.rawValue, forKey: Self.lastPlayerKey)
+        }
         let key: String? = { if case .nowPlaying(let n) = state { "\(n.player.rawValue)|\(n.trackID)" } else { nil } }()
         let musicShown = model.tiles.contains(.music)
         if musicShown, let key, key != lyricsTrack, case .nowPlaying(let now) = state {
@@ -404,7 +413,7 @@ final class MusicService {
     }
 
     private func send(_ command: MusicCommand) {
-        guard case .nowPlaying(let now) = model.music, now.player.isRunning, !stopping.contains(now.player) else { return }
+        guard !Diag.selfTest, case .nowPlaying(let now) = model.music, now.player.isRunning, !stopping.contains(now.player) else { return }
         Self.scriptsRun += 1
         Task { [weak self] in
             _ = await ScriptThread.shared.run(PlayerScripts.command(command, now.player))
@@ -415,6 +424,7 @@ final class MusicService {
 
     /// The Connect button: macOS shows its Automation prompt for this one player.
     private func connect(_ player: Player) {
+        guard !Diag.selfTest else { return }
         guard player.isRunning else { refresh(); return }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             _ = Automation.consent(player, ask: true)

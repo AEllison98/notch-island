@@ -114,7 +114,7 @@ enum SelfTest {
             $0.executableURL?.lastPathComponent == "NotchIsland" && $0.processIdentifier != getpid() }
         check(others.isEmpty, "setup: no other Notch Island is running (\(others.map(\.processIdentifier)))")
         let realKeys = ["theme", "tileOrder", "hiddenTiles", "city", "weatherUsesLocation", "resolvedCity",
-                        "peekApps", "peekPower", "peekFocus"]
+                        "peekApps", "peekPower", "peekFocus", MusicService.lastPlayerKey]
         let realBefore = realKeys.map { UserDefaults.standard.object(forKey: $0) as? NSObject }
         let frontBefore = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"
         let n = c.model.notch
@@ -161,6 +161,7 @@ enum SelfTest {
         checkWeatherOffline(c)
         await checkCalendar(c)
         await checkMusic(c)
+        await checkTileLinks(c)
         checkPeeks()
         if let claude { await checkClaude(c, claude) }
         if CommandLine.arguments.contains("--network") { await checkLyricsLive() }
@@ -189,6 +190,7 @@ enum SelfTest {
             check(Net.shared.requestCount == 0, "privacy: the self-test made no network requests (\(Net.shared.requestCount))")
         }
         check(MusicService.scriptsRun == 0, "music: the self-test sent no Apple Events to your players (\(MusicService.scriptsRun))")
+        check(IslandController.appsOpened == 0, "tiles: the self-test opened none of your apps (\(IslandController.appsOpened))")
         let realAfter = realKeys.map { UserDefaults.standard.object(forKey: $0) as? NSObject }
         check(realBefore == realAfter, "settings: the self-test left your real settings untouched")
 
@@ -437,9 +439,10 @@ enum SelfTest {
         c.debugMouseEntered()
         await pause(0.45)
         check(c.model.mode == .expanded && !c.model.pinned && c.watchdogRunning, "click: hover-open is not pinned yet")
-        let body = CGPoint(x: n.rect.midX, y: n.screenFrame.maxY - n.height - 60)
-        c.mouseLocation = { body }
-        await click(c, atScreen: body)
+        // On the glass beside the notch: a click on a tile now opens that tile's app instead.
+        let band = CGPoint(x: n.rect.maxX + 40, y: n.screenFrame.maxY - n.height / 2)
+        c.mouseLocation = { band }
+        await click(c, atScreen: band)
         await pause(0.2)
         check(c.model.pinned && c.hasOutsideClickMonitor && !c.watchdogRunning, "click: clicking a hover-opened island pins it")
         c.mouseLocation = { away }
@@ -657,6 +660,7 @@ extension SelfTest {
         await pause(0.8)
         c.expand(pinned: false)
         await pause(1.0)
+        c.lastOpenedApp = nil
         if let start = screenCentre(c, "tile.weather") {
             c.mouseLocation = { start }
             send(c, .leftMouseDown, atScreen: start)
@@ -696,6 +700,7 @@ extension SelfTest {
             await pause(0.6)
             check(c.model.tiles == [.music, .weather, .timer, .calendar],
                   "drag: Calendar dragged past the narrow Focus Timer (\(c.model.tiles.map(\.rawValue)))")
+            check(c.lastOpenedApp == nil && c.model.mode == .expanded, "drag: dropping a tile does not open its app")
         } else {
             check(false, "drag: Calendar tile not found on screen")
         }
@@ -1289,6 +1294,174 @@ extension SelfTest {
         _ = await Hook(event("Stop", session: "s9")).finish()
         await pause(4.5)
         check(c.model.activity == nil, "claude: the pill goes once no session is working")
+    }
+}
+
+extension SelfTest {
+    // MARK: Tiles open their apps
+
+    static func checkTileLinks(_ c: IslandController) async {
+        let n = c.model.notch
+        c.mouseLocation = { CGPoint(x: n.rect.midX, y: n.screenFrame.maxY - n.height - 40) }
+        let spotify = NowPlaying(player: .spotify, title: "Low Tide", artist: "Nova Lane", album: "Harbour", duration: 213,
+                                 position: 6, positionAt: Date(), isPlaying: true, trackID: "links", artwork: nil)
+
+        // Where the tiles look for their apps. (Spotify is optional, so it is not required here.)
+        let system = ["com.apple.weather", "com.apple.iCal", Player.music.rawValue]
+        let missing = system.filter { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) == nil }
+        check(missing.isEmpty, "tiles: Weather, Calendar and Music are installed where their tiles look for them (missing \(missing))")
+
+        // Which player the Music tile opens, in every state it can be in.
+        func player(_ state: MusicState, running: [Player] = [], last: Player? = nil) -> String? {
+            IslandController.appBundleID(for: .music, music: state, running: running, lastPlayer: last)
+        }
+        let spotifyID = Player.spotify.rawValue, musicID = Player.music.rawValue
+        check(player(.nowPlaying(spotify), running: [.music], last: .music) == spotifyID
+              && player(.needsConsent(.spotify)) == spotifyID
+              && player(.denied(.music), running: [.spotify]) == musicID
+              && player(.idle, running: [.spotify], last: .music) == spotifyID
+              && player(.idle, running: [.music, .spotify], last: .spotify) == spotifyID
+              && player(.idle, running: [.music, .spotify]) == musicID
+              && player(.idle, last: .spotify) == spotifyID
+              && player(.idle) == musicID
+              && IslandController.appBundleID(for: .timer, music: .idle, running: [.music], lastPlayer: .music) == nil,
+              "tiles: Music opens the player it shows, else an open one, else the one you used last, else Apple Music")
+
+        // The island's own tap must not run as well when a tile or a button inside one takes the
+        // click: on a hover-opened island it would pin it, and on a closing one reopen it.
+        var islandTaps = 0
+        let islandTap = c.model.onTap
+        c.model.onTap = { islandTaps += 1; islandTap() }
+
+        func click(_ kind: TileKind, dx: CGFloat = 24) async -> String? {
+            c.lastOpenedApp = nil
+            islandTaps = 0
+            guard let f = c.model.frames["tile.\(kind.rawValue)"] else { return "tile not found" }
+            await SelfTest.click(c, atScreen: c.screenPoint(fromWindow: CGPoint(x: f.minX + dx, y: f.midY)))
+            await pause(0.4)
+            return c.lastOpenedApp
+        }
+        func openPinned() async { c.expand(pinned: true); await pause(0.9) }
+        /// Opened by hover, as most people open it. Closed first: expand() leaves an island that
+        /// is already open (and maybe pinned) as it is.
+        func openByHover() async {
+            c.debugClickOutside()
+            await pause(0.8)
+            c.expand(pinned: false)
+            await pause(0.9)
+        }
+
+        await openPinned()
+        let weather = await click(.weather)
+        check(weather == "com.apple.weather" && c.model.mode != .expanded && islandTaps == 0,
+              "tiles: clicking Weather opens the Weather app, and the island gets out of the way (\(weather ?? "nothing"), island taps \(islandTaps))")
+        await pause(0.6)
+        await openByHover()
+        let byHover = c.model.mode == .expanded && !c.model.pinned
+        let calendar = await click(.calendar)
+        check(byHover && calendar == "com.apple.iCal" && c.model.mode != .expanded && islandTaps == 0,
+              "tiles: clicking Calendar on a hover-opened island opens Calendar (\(calendar ?? "nothing"), island taps \(islandTaps))")
+        await pause(0.6)
+        c.setMusic(.nowPlaying(spotify), lyrics: nil)
+        await openPinned()
+        let music = await click(.music, dx: 40)
+        check(music == spotifyID && c.model.mode != .expanded && islandTaps == 0,
+              "tiles: clicking Music opens the player it shows, Spotify here (\(music ?? "nothing"), island taps \(islandTaps))")
+        await pause(0.6)
+
+        await openByHover()
+        check(c.model.mode == .expanded && !c.model.pinned, "tiles: (set-up) the island is open by hover, not pinned")
+        let timer = await click(.timer)
+        check(timer == nil && c.model.mode == .expanded && c.model.pinned && islandTaps == 1,
+              "tiles: the Focus Timer has no app, so a click on it pins the island instead (island taps \(islandTaps))")
+
+        // Buttons inside a tile take the click themselves: no app, and no click on the island.
+        await openByHover()
+        var sent: [MusicCommand] = []
+        let send = c.model.onMusicCommand
+        c.model.onMusicCommand = { sent.append($0) }
+        c.lastOpenedApp = nil
+        islandTaps = 0
+        if let play = screenCentre(c, "music.playPause") {
+            await SelfTest.click(c, atScreen: play)
+            await pause(0.4)
+            check(sent == [.playPause] && c.lastOpenedApp == nil && islandTaps == 0 && c.model.mode == .expanded && !c.model.pinned,
+                  "tiles: Play/Pause plays or pauses, and neither opens the app nor pins the island (sent \(sent), island taps \(islandTaps))")
+        } else {
+            check(false, "tiles: Play/Pause button not found")
+        }
+        // With nothing loaded the controls are dimmed (disabled), and a click on them is a click
+        // on the tile, as the README says.
+        c.setMusic(.idle, lyrics: nil)
+        await openByHover()
+        sent = []
+        c.lastOpenedApp = nil
+        islandTaps = 0
+        let expected = c.model.appBundleID(for: .music)
+        if let play = screenCentre(c, "music.playPause") {
+            await SelfTest.click(c, atScreen: play)
+            await pause(0.4)
+            check(expected != nil && c.lastOpenedApp == expected && sent.isEmpty && islandTaps == 0,
+                  "tiles: a click on the dimmed controls opens the player (\(c.lastOpenedApp ?? "nothing"), sent \(sent))")
+        } else {
+            check(false, "tiles: dimmed Play button not found")
+        }
+        await openByHover()
+        c.model.onMusicCommand = send
+
+        var asked: [String] = []
+        let connectPlayer = c.model.onConnectPlayer, connectCalendar = c.model.onConnectCalendar
+        c.model.onConnectPlayer = { asked.append($0.name) }
+        c.model.onConnectCalendar = { asked.append("Calendar") }
+        c.setMusic(.needsConsent(.spotify), lyrics: nil)
+        c.model.calendar = .notConnected
+        await pause(0.5)
+        c.lastOpenedApp = nil
+        islandTaps = 0
+        if let player = screenCentre(c, "music.connect"), let cal = screenCentre(c, "calendar.connect") {
+            await SelfTest.click(c, atScreen: player)
+            await pause(0.3)
+            await SelfTest.click(c, atScreen: cal)
+            await pause(0.4)
+            check(asked == ["Spotify", "Calendar"] && c.lastOpenedApp == nil && islandTaps == 0 && c.model.mode == .expanded,
+                  "tiles: the Connect buttons ask for access and open no app (\(asked), island taps \(islandTaps))")
+        } else {
+            check(false, "tiles: a Connect button was not found")
+        }
+        c.model.onConnectPlayer = connectPlayer
+        c.model.onConnectCalendar = connectCalendar
+
+        // The hover tint is drawn (set directly: real hover is ignored in the self-test, and a
+        // synthesized event does not move the pointer that onHover follows). The same pixel near
+        // a tile's lower right corner, with and without it.
+        if let w = c.model.frames["tile.weather"], let t = c.model.frames["tile.timer"] {
+            func sample(_ f: CGRect, hovered: TileKind?) async -> (alpha: CGFloat, red: CGFloat) {
+                c.model.hoveredTile = hovered
+                await pause(0.3)
+                let screen = c.screenPoint(fromWindow: CGPoint(x: f.maxX - 14, y: f.maxY - 6))
+                return Pixels(view: c.hosting)?.alphaRed(atX: screen.x - c.hostScreenFrame.minX,
+                                                        yFromTop: c.hostScreenFrame.maxY - screen.y) ?? (-1, 0)
+            }
+            let plain = await sample(w, hovered: nil), lit = await sample(w, hovered: .weather)
+            let otherLit = await sample(w, hovered: .timer)
+            let timerPlain = await sample(t, hovered: nil), timerLit = await sample(t, hovered: .timer)
+            let onTiles = [plain, lit, otherLit, timerPlain, timerLit].allSatisfy { $0.alpha > 0.99 }
+            check(onTiles, "tiles: (set-up) the tint samples land on the tiles")
+            check(onTiles && abs(lit.red - plain.red) > 0.02 && abs(otherLit.red - plain.red) < 0.005,
+                  "tiles: a tile that opens an app is tinted under the pointer (\(plain.red) -> \(lit.red); another tile hovered \(otherLit.red))")
+            check(onTiles && abs(timerLit.red - timerPlain.red) < 0.005,
+                  "tiles: the Focus Timer, which opens nothing, is not tinted (\(timerPlain.red) -> \(timerLit.red))")
+            c.model.hoveredTile = .weather
+            c.collapse()
+            check(c.model.hoveredTile == nil, "tiles: and the tint is cleared when the island closes")
+        } else {
+            check(false, "tiles: Weather or Focus Timer tile not found for the hover tint")
+        }
+
+        c.model.onTap = islandTap
+        c.setMusic(.idle, lyrics: nil)
+        c.debugClickOutside()
+        await pause(0.8)
     }
 }
 

@@ -18,6 +18,9 @@ enum TileKind: String, CaseIterable, Identifiable {
 
     /// The timer is narrow, as in the mockup, but wide enough for Reset beside Start/Pause.
     var width: CGFloat { self == .timer ? 104 : 204 }
+
+    /// Clicking the tile opens its app (the timer has none).
+    var opensApp: Bool { self != .timer }
 }
 
 enum TileStyle {
@@ -56,10 +59,27 @@ struct TilesRow: View {
             ZStack(alignment: .topLeading) {
                 ForEach(model.tiles) { kind in
                     let isDragged = dragging == kind
+                    let shape = RoundedRectangle(cornerRadius: TileStyle.radius, style: .continuous)
                     TileView(kind: kind, model: model)
                         .frame(width: kind.width, height: IslandLayout.tileHeight)
-                        .background(model.palette.tile, in: RoundedRectangle(cornerRadius: TileStyle.radius, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: TileStyle.radius, style: .continuous).strokeBorder(model.palette.tileEdge))
+                        // A tile that opens an app takes a light tint under the pointer: on the
+                        // fill, beneath the tile's content (a second .background would sit under
+                        // the opaque fill and never show).
+                        .background {
+                            shape.fill(model.palette.tile)
+                                .overlay(shape.fill(model.palette.text.opacity(model.hoveredTile == kind && kind.opensApp ? 0.05 : 0)))
+                        }
+                        .overlay(shape.strokeBorder(model.palette.tileEdge))
+                        .contentShape(shape)
+                        .onHover { inside in
+                            // Like the island's own hover: your pointer must not change what the
+                            // self-test is measuring.
+                            guard !Diag.selfTest else { return }
+                            if inside { model.hoveredTile = kind } else if model.hoveredTile == kind { model.hoveredTile = nil }
+                        }
+                        // Buttons inside the tile keep their own clicks; anywhere else opens the app.
+                        // The timer has no app, so a click on it pins the island like any other.
+                        .onTapGesture { if kind.opensApp { model.onOpenTile(kind) } else { model.onTap() } }
                         // Inside the offset, so it reports where the tile is drawn, not where
                         // the stack would have put it.
                         .reportFrame("tile.\(kind.rawValue)", to: model)
@@ -70,6 +90,13 @@ struct TilesRow: View {
                         .gesture(reorder(kind))
                         .accessibilityElement(children: .contain)
                         .accessibilityLabel(kind.title)
+                        // For VoiceOver the click is a named action ("Open Spotify"). The tile
+                        // stays a group, so the buttons inside it can still be reached.
+                        .accessibilityActions {
+                            if let name = model.openActionName(for: kind) {
+                                Button(name) { model.onOpenTile(kind) }
+                            }
+                        }
                 }
             }
             .frame(width: rowWidth, height: IslandLayout.tileHeight, alignment: .topLeading)
@@ -414,7 +441,7 @@ private struct CalendarTile: View {
                         Text("Your next event")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(palette.text)
-                        Button(action: model.onConnectCalendar) {
+                        Button { model.onConnectCalendar() } label: {
                             Text("Connect Calendar")
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(palette.text)

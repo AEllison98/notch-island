@@ -68,6 +68,8 @@ final class CalendarService {
 
     /// Asks macOS for Calendar access. Only called from the tile's Connect button.
     func connect() {
+        // The self-test never asks for your calendars.
+        guard !Diag.selfTest else { return }
         Task { [weak self] in
             guard let self else { return }
             _ = try? await self.store.requestFullAccessToEvents()
