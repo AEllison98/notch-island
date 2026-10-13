@@ -46,8 +46,8 @@ function run(argv) {
 
     const command = '"$HOME/Library/Application Support/NotchIsland/notch-island-hook"';
     const ours = (h) => h && typeof h.command === 'string' && h.command.indexOf('notch-island-hook') >= 0;
-    const events = ['UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure',
-                    'Notification', 'SubagentStop', 'Stop', 'StopFailure', 'SessionEnd'];
+    const events = ['UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PermissionDenied', 'PostToolUse',
+                    'PostToolUseFailure', 'Notification', 'SubagentStop', 'Stop', 'StopFailure', 'SessionEnd'];
     settings.hooks = settings.hooks || {};
     const changed = [];
 

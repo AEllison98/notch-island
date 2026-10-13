@@ -33,6 +33,17 @@
         ]
       }
     ],
+    "PermissionDenied": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/Library/Application Support/NotchIsland/notch-island-hook\"",
+            "async": true
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "hooks": [

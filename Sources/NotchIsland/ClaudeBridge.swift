@@ -303,6 +303,11 @@ final class ClaudeBridge {
             dismiss("it ran") { $0.asker == asker && $0.tool == tool && $0.input == input }
         case "SubagentStop":
             dismiss { $0.asker == asker }
+        case "PermissionDenied":
+            // Auto mode refused something on its own, without asking you: say what, briefly.
+            let peek = Self.blockedPeek(tool: tool, input: input, project: project)
+            Diag.log("claude blocked: \(peek.title) | \(peek.subtitle ?? "")")
+            island.showPeek(peek)
         case "Notification":
             let kind = event["notification_type"] as? String ?? ""
             if kind == "idle_prompt" {
@@ -500,6 +505,17 @@ final class ClaudeBridge {
         return ClaudeCard(id: UUID(), title: title, detail: detail, caption: caption.map { Self.revealHidden($0).0 },
                           project: project, position: 1, count: 1, unlocked: false,
                           tooLong: detail.count > ClaudeCard.maxDetail)
+    }
+
+    /// The bubble for something auto mode blocked: what it was (a command's first line, or the
+    /// file or page the tool was for), and the project.
+    static func blockedPeek(tool: String, input: NSDictionary, project: String) -> PeekContent {
+        let detail = ["command", "file_path", "notebook_path", "url", "pattern"].lazy
+            .compactMap { input[$0] as? String }.first ?? ""
+        let firstLine = revealHidden(String(detail.split(separator: "\n").first ?? "")).0
+        let title = tool == "Bash" ? "Auto mode blocked a command" : "Auto mode blocked \(tool.isEmpty ? "a tool" : tool)"
+        let subtitle = [firstLine.isEmpty ? nil : firstLine, project].compactMap { $0 }.joined(separator: " · ")
+        return PeekContent(icon: .symbol("hand.raised.slash.fill"), title: title, subtitle: subtitle, duration: 4)
     }
 
     /// Two labelled blocks with every line marked, so no line of one can pass for the other.

@@ -27,7 +27,7 @@ right from the notch.
 
 ### Download (easiest)
 
-1. Download **NotchIsland-0.1.0.zip** from the
+1. Download **NotchIsland-0.1.1.zip** (or the newest version) from the
    [Releases page](https://github.com/AEllison98/notch-island/releases/latest) and double-click it to
    unzip.
 2. Drag **NotchIsland.app** into your **Applications** folder.
@@ -139,9 +139,9 @@ For `PermissionRequest`, which waits for your answer, it is:
 { "hooks": [ { "type": "command", "command": "\"$HOME/Library/Application Support/NotchIsland/notch-island-hook\"", "timeout": 600 } ] }
 ```
 
-The events are `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PostToolUseFailure`,
-`Notification`, `SubagentStop`, `Stop`, `StopFailure` and `SessionEnd`. For example, a settings file that
-already had another `Stop` hook ends up like this:
+The events are `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PermissionDenied`, `PostToolUse`,
+`PostToolUseFailure`, `Notification`, `SubagentStop`, `Stop`, `StopFailure` and `SessionEnd`. For example, a
+settings file that already had another `Stop` hook ends up like this:
 
 ```json
 "Stop": [
@@ -163,8 +163,8 @@ should list `notch-island-hook`. Then ask Claude to do something; the notch show
   and a small animated grid.
 - **When Claude asks for permission**, the island opens with the request: the whole command, or everything
   the tool will do, never a shortened version. Settings that widen what it may do, such as
-  `dangerouslyDisableSandbox`, are listed first, every line of an edit is marked `-` or `+`, and invisible or direction-changing characters show as
-  `⟦U+202E⟧`.
+  `dangerouslyDisableSandbox`, are listed first, every line of an edit is marked `-` or `+`, and invisible
+  or direction-changing characters show as `⟦U+202E⟧`.
   - **Deny** (⌃⌥⌘N) works at once.
   - **Allow** (⌃⌥⌘Y) unlocks only once the end of the request has been on screen, for at least half a
     second. A long command has to be scrolled to the end first.
@@ -175,12 +175,26 @@ should list `notch-island-hook`. Then ask Claude to do something; the notch show
   - Clicking elsewhere tucks the request into an "Allow?" pill. Rest on the notch to bring it back (and
     read it to the end again).
   - Requests from several sessions, or subagents, wait in line, one card at a time.
+- **When auto mode blocks something on its own**: a bubble, "Auto mode blocked a command", with the
+  command.
 - **When Claude finishes**: "Done in 1 min 12 s · your-project".
 
-Good to know: in **auto** permission mode Claude Code only asks about what its classifier will not approve,
-so you see fewer cards. `claude --bare` skips hooks entirely. If another of your hooks also answers
-permission requests, the first to answer wins. If Notch Island is not running, the hook does nothing and
-Claude Code works exactly as before.
+### In auto mode
+
+In **auto** permission mode, Claude Code's classifier decides by itself and does not ask you, so the
+Allow/Deny card rarely appears. In testing with Claude Code 2.1.284 it ran, without asking, creating files
+inside and outside the project, deleting a folder outside the project and a force-push, and it blocked
+piping a download into the shell outright. So in auto mode you mostly see the working pill, a bubble when
+something is blocked, and "Done".
+
+Auto mode is not available on every model. On Haiku, for example, Claude Code says "auto mode unavailable for
+this model" and switches to asking you, so every command that is not read-only brings up a card.
+
+### Good to know
+
+- `claude --bare` skips hooks entirely.
+- If another of your hooks also answers permission requests, the first to answer wins.
+- If Notch Island is not running, the hook does nothing and Claude Code works exactly as before.
 
 ## Permissions
 
