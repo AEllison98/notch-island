@@ -57,6 +57,8 @@ if [ "$plist_id" != "$BUNDLE_ID" ]; then
     exit 1
 fi
 
+# Extended attributes (Finder info, provenance) would end up in the zip as ._ files.
+xattr -cr "$STAGE"
 if [ "$IDENTITY" = "-" ]; then echo "==> Signing ad-hoc"; else echo "==> Signing with: $IDENTITY"; fi
 # --timestamp=none: no request to Apple's timestamp server. Nothing leaves the Mac.
 codesign --force --timestamp=none --sign "$IDENTITY" "$STAGE"
@@ -66,7 +68,9 @@ if [ "$MODE" = "--release" ]; then
     VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$STAGE/Contents/Info.plist")"
     ZIP="build/$APP_NAME-$VERSION.zip"
     rm -f "$ZIP"
-    ditto -c -k --keepParent "$STAGE" "$ZIP"
+    # No resource forks or extended attributes: other unzip tools would turn them into stray
+    # ._ files inside the app and break its signature.
+    ditto -c -k --norsrc --noextattr --keepParent "$STAGE" "$ZIP"
     echo "==> Release: $ZIP"
     shasum -a 256 "$ZIP"
     exit 0

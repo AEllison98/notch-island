@@ -114,8 +114,8 @@ bash install-claude-hooks.sh
 ```
 
 It backs up your settings file, adds Notch Island's hooks, and keeps everything else as it was, including
-hooks you already have. Running it again changes nothing. `bash install-claude-hooks.sh --uninstall` takes
-them out again.
+hooks you already have (and if your settings file is a symlink, it edits the file the link points to).
+Running it again changes nothing. `bash install-claude-hooks.sh --uninstall` takes them out again.
 
 ### Or add them by hand
 
@@ -234,6 +234,8 @@ tccutil reset All local.NotchIsland
   notch app may draw over it.
 - **No Claude Code activity**: open Notch Island first, then start a *new* Claude Code session and check
   `/hooks`. The file `~/Library/Application Support/NotchIsland/notch-island-hook` should exist.
+- **Claude Code shows "No such file or directory" for notch-island-hook**: the hooks are in your settings
+  but Notch Island has not been opened yet (it puts the hook there when it starts). Open it once.
 - **Permissions asked again after updating**: expected with the downloaded build (see Install).
 - **"Focus status isn't available"**: macOS refused it; use the Shortcuts automation under Peeks.
 
@@ -245,7 +247,7 @@ own settings and socket, never talks to your music players, and makes no network
 `--network`. Quit Notch Island first.
 
 ```bash
-open -g -W --stderr /tmp/island.log /Applications/NotchIsland.app --args --self-test; grep -E "FAIL|ALL PASS" /tmp/island.log
+open -g -W --stderr /tmp/island.log -a NotchIsland --args --self-test; grep -E "FAIL|ALL PASS" /tmp/island.log
 ```
 
 ## How it is built

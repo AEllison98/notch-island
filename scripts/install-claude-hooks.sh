@@ -17,6 +17,16 @@ case "${1:-}" in
     *) echo "usage: $0 [--uninstall]" >&2; exit 2 ;;
 esac
 
+# Work on the real file: many people keep settings.json as a symlink into a dotfiles folder,
+# and writing to the link's path would replace the link with a plain file.
+while [ -L "$SETTINGS" ]; do
+    LINK="$(readlink "$SETTINGS")"
+    case "$LINK" in
+        /*) SETTINGS="$LINK" ;;
+        *) SETTINGS="$(dirname "$SETTINGS")/$LINK" ;;
+    esac
+done
+
 mkdir -p "$(dirname "$SETTINGS")"
 [ -f "$SETTINGS" ] || { echo '{}' > "$SETTINGS"; chmod 600 "$SETTINGS"; }
 MODE="$(stat -f %Lp "$SETTINGS")"
@@ -71,10 +81,21 @@ JS
 )"
 chmod "$MODE" "$SETTINGS"
 
-if [ "$ACTION" = install ]; then
-    echo "Added Notch Island to: $RESULT"
+if [ "$RESULT" = none ]; then
+    rm -f "$BACKUP"
+    if [ "$ACTION" = install ]; then echo "Notch Island's hooks were already there; nothing changed."
+    else echo "Notch Island's hooks were not there; nothing changed."; fi
 else
-    echo "Removed Notch Island from: $RESULT"
+    if [ "$ACTION" = install ]; then echo "Added Notch Island to: $RESULT"
+    else echo "Removed Notch Island from: $RESULT"; fi
+    echo "Backup of the previous file: $BACKUP"
+    echo "New Claude Code sessions will use the change."
 fi
-echo "Backup of the previous file: $BACKUP"
-echo "New Claude Code sessions will use the change."
+
+HOOK="$HOME/Library/Application Support/NotchIsland/notch-island-hook"
+if [ "$ACTION" = install ] && [ ! -x "$HOOK" ]; then
+    echo
+    echo "One more step: open Notch Island once. It puts its hook at"
+    echo "  $HOOK"
+    echo "and until it is there, Claude Code shows a hook error on each event."
+fi
